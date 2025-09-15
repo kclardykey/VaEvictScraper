@@ -3,4 +3,5 @@ ipykernel
 requests
 selenium
 pandas
+chromedriver
 
