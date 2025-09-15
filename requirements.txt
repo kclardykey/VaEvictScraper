@@ -2,3 +2,5 @@ papermill
 ipykernel
 requests
 selenium
+pandas
+glob
