@@ -1,14 +1,17 @@
-name: Run eviction scraper notebook
+name: Run eviction scraper notebook (Selenium)
 
 on:
-  workflow_dispatch: {}   # allows manual run
+  workflow_dispatch: {}   # manual run button
   schedule:
-    # 4:17 AM Eastern (EDT right now = 08:17 UTC)
+    # 5:19 PM Eastern (EDT now = 21:19 UTC). Update to 22:19 UTC in EST if you want fixed local time.
     - cron: "19 21 * * *"
 
 jobs:
   run-notebook:
     runs-on: ubuntu-latest
+    concurrency:
+      group: run-eviction-scraper
+      cancel-in-progress: false
 
     steps:
       - name: Check out repo
@@ -18,18 +21,69 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          # Ensure your notebook deps are listed in requirements.txt
+          # Include: papermill, ipykernel, selenium, requests, pandas, bs4, etc. as needed
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          # Safety net in case selenium isn't in requirements.txt
+          python -c "import selenium" 2>/dev/null || pip install selenium
 
-      - name: Execute notebook with papermill
+      # --- Chrome + ChromeDriver for Selenium ---
+      - name: Install Google Chrome
         run: |
-          papermill "VA Court Eviction Scraper - Final 3 16 25.ipynb" "output.ipynb"
+          sudo apt-get update
+          sudo apt-get install -y wget gnupg
+          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-linux-keyring.gpg
+          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-linux-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+          google-chrome --version
 
+      - name: Install ChromeDriver
+        run: |
+          sudo apt-get install -y chromium-chromedriver
+          which chromedriver
+          chromedriver --version
+
+      # Optional: show versions for debugging
+      - name: Show environment versions
+        run: |
+          python --version
+          pip --version
+
+      # --- Execute the notebook with Papermill ---
+      - name: Execute notebook with papermill
+        env:
+          # If your notebook reads secrets, add them in repo Settings > Secrets and reference here
+          # EXAMPLE_API_KEY: ${{ secrets.EXAMPLE_API_KEY }}
+          # Ensure your notebook uses headless Chrome (Options: --headless=new --no-sandbox --disable-dev-shm-usage)
+          # Avoid --user-data-dir, or set a unique tmp dir if you must.
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          # Use a timestamped output to keep each run separate
+          NOW=$(date +"%Y-%m-%d-%H-%M-%S")
+          papermill "VA Court Eviction Scraper - Final 3 16 25.ipynb" "output-${NOW}.ipynb"
+
+      # Upload executed notebook artifact
       - name: Upload executed notebook
         uses: actions/upload-artifact@v4
         with:
           name: executed-notebook
-          path: output.ipynb
+          path: output-*.ipynb
+
+      # (Optional) Upload any CSV/JSON your scraper generated
+      - name: Upload data artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scraper-data
+          path: |
+            **/*.csv
+            **/*.json
+            **/outputs/**
+            !.venv/**
+            !**/__pycache__/**
