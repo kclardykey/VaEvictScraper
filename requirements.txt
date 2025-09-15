@@ -3,4 +3,4 @@ ipykernel
 requests
 selenium
 pandas
-glob
+
