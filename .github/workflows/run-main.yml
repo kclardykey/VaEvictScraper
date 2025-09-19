@@ -2,9 +2,7 @@ name: Run eviction scraper notebook (Selenium)
 
 on:
   workflow_dispatch: {}   # manual run button
-  schedule:
-    # 5:19 PM Eastern (EDT now = 21:19 UTC). Update to 22:19 UTC in EST if you want fixed local time.
-    - cron: "19 21 * * *"
+  
 
 jobs:
   run-notebook:
